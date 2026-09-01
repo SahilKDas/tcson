@@ -1,39 +1,76 @@
 {
-  "name": "tcson",
+  "name": "@sahilkdas/tcson",
   "version": "0.1.0",
-  "description": "Evaluate a constrained TypeScript configuration language as canonical JSON",
+  "description": "Deterministic TypeScript configuration for Node.js, Bun, and Deno",
   "license": "BSD-3-Clause",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "type": "commonjs",
+  "author": "SahilKDas",
+  "homepage": "https://github.com/SahilKDas/tcson#readme",
+  "bugs": "https://github.com/SahilKDas/tcson/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SahilKDas/tcson.git"
+  },
+  "keywords": [
+    "configuration",
+    "deterministic",
+    "json",
+    "typescript"
+  ],
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "default": "./dist/index.js"
+      "import": {
+        "types": "./dist/types/index.d.mts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.cts",
+        "default": "./dist/cjs/index.js"
+      },
+      "default": "./dist/esm/index.js"
     }
   },
   "bin": {
-    "tcson": "./dist/cli.js",
-    "tyson": "./dist/cli.js"
+    "tcson": "./dist/esm/cli.js"
   },
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "SECURITY.md",
+    "docs"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "node scripts/build.mjs",
+    "clean": "node scripts/clean.mjs",
+    "format": "biome format --write .",
+    "check": "npm run typecheck && biome check --files-ignore-unknown=true .",
     "test": "npm run build && node --test",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test:coverage": "npm run build && node --experimental-test-coverage --test --test-coverage-include=dist/cjs/**/*.js --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=85",
+    "test:bun": "npm run build && bun test",
+    "test:deno": "npm run build && deno run --allow-read test/deno-smoke.mjs && deno run --allow-read dist/esm/cli.js eval test/fixtures/deno.tcson",
+    "typecheck": "tsc6 -p tsconfig.json --noEmit",
+    "pack:check": "npm run build && publint --strict && attw --pack . && node scripts/pack-check.mjs",
+    "prepack": "npm run build"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "dependencies": {
-    "typescript": "5.9.3"
+    "@typescript/typescript6": "6.0.2"
   },
   "devDependencies": {
-    "@types/node": "24.13.3"
+    "@arethetypeswrong/cli": "0.18.5",
+    "@biomejs/biome": "2.5.11",
+    "@types/node": "22.20.1",
+    "fast-check": "4.9.0",
+    "publint": "0.3.24"
   }
 }

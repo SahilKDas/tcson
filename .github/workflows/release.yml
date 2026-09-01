@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    name: Verify signed tag and main ancestry
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      dist_tag: ${{ steps.metadata.outputs.dist_tag }}
+      prerelease: ${{ steps.metadata.outputs.prerelease }}
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify release metadata
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          test "v${version}" = "${GITHUB_REF_NAME}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
+
+          tag_type="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq .object.type)"
+          test "${tag_type}" = "tag"
+          tag_object="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq .object.sha)"
+          verified="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object}" --jq .verification.verified)"
+          test "${verified}" = "true"
+
+          if [[ "${version}" == *-* ]]; then
+            echo "dist_tag=next" >> "${GITHUB_OUTPUT}"
+            echo "prerelease=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "dist_tag=latest" >> "${GITHUB_OUTPUT}"
+            echo "prerelease=false" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+  quality:
+    name: Blocking quality matrix
+    needs: metadata
+    uses: ./.github/workflows/quality.yml
+
+  publish:
+    name: Publish GitHub Package and Release
+    needs: [metadata, quality]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js 24 and GitHub Packages
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: "@sahilkdas"
+      - name: Install and build once
+        run: |
+          npm ci
+          npm run build
+      - name: Pack and validate the release artifact
+        id: artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/pack-check.mjs --keep
+          tarball="$(find . -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          test -n "${tarball}"
+          npx publint "${tarball}" --strict
+          npx attw "${tarball}"
+          echo "tarball=${tarball}" >> "${GITHUB_OUTPUT}"
+      - name: Generate CycloneDX SBOM
+        shell: bash
+        run: |
+          npm sbom --sbom-format=cyclonedx > "tcson-${{ needs.metadata.outputs.version }}.cdx.json"
+      - name: Attest the package tarball
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.artifact.outputs.tarball }}
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          npm publish "${{ steps.artifact.outputs.tarball }}"
+          --registry=https://npm.pkg.github.com
+          --tag="${{ needs.metadata.outputs.dist_tag }}"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          args=(
+            "${GITHUB_REF_NAME}"
+            "${{ steps.artifact.outputs.tarball }}"
+            "tcson-${{ needs.metadata.outputs.version }}.cdx.json"
+            --verify-tag
+            --generate-notes
+            --title "TcSON ${{ needs.metadata.outputs.version }}"
+          )
+          if [[ "${{ needs.metadata.outputs.prerelease }}" = "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"

@@ -1,14 +1,14 @@
-export type TysonErrorCode =
-  | "TYSON_INVALID_PATH"
-  | "TYSON_FILE_NOT_FOUND"
-  | "TYSON_IMPORT_NOT_FOUND"
-  | "TYSON_COMPILE_ERROR"
-  | "TYSON_RUNTIME_ERROR"
-  | "TYSON_EXPORT_MISSING"
-  | "TYSON_NOT_JSON"
-  | "TYSON_IO_ERROR";
+export type TcsonErrorCode =
+  | "TCSON_INVALID_PATH"
+  | "TCSON_FILE_NOT_FOUND"
+  | "TCSON_IMPORT_NOT_FOUND"
+  | "TCSON_COMPILE_ERROR"
+  | "TCSON_RUNTIME_ERROR"
+  | "TCSON_EXPORT_MISSING"
+  | "TCSON_NOT_JSON"
+  | "TCSON_IO_ERROR";
 
-export interface TysonDiagnostic {
+export interface TcsonDiagnostic {
   readonly message: string;
   readonly file?: string;
   readonly line?: number;
@@ -16,17 +16,17 @@ export interface TysonDiagnostic {
   readonly length?: number;
 }
 
-export class TysonError extends Error {
-  public override readonly name = "TysonError" as const;
-  public readonly code: TysonErrorCode;
-  public readonly diagnostics: readonly TysonDiagnostic[];
+export class TcsonError extends Error {
+  public override readonly name = "TcsonError" as const;
+  public readonly code: TcsonErrorCode;
+  public readonly diagnostics: readonly TcsonDiagnostic[];
   public override readonly cause?: unknown;
 
   /** @internal */
   public constructor(
-    code: TysonErrorCode,
+    code: TcsonErrorCode,
     message: string,
-    diagnostics: readonly TysonDiagnostic[] = [],
+    diagnostics: readonly TcsonDiagnostic[] = [],
     cause?: unknown,
   ) {
     super(message);
@@ -39,6 +39,7 @@ export class TysonError extends Error {
   }
 }
 
+/** @internal */
 export function readableThrown(value: unknown): string {
   if (value instanceof Error && value.message) {
     return value.message;

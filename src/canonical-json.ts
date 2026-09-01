@@ -1,19 +1,17 @@
-import { TysonError } from "./errors";
+import { TcsonError } from "./errors.js";
+import { host } from "./host.js";
 
 function notJson(condition: string, path: string): never {
-  throw new TysonError(
-    "TYSON_NOT_JSON",
-    `Result is not JSON: ${condition} at ${path}`,
-  );
+  throw new TcsonError("TCSON_NOT_JSON", `Result is not JSON: ${condition} at ${path}`);
 }
 
 function compareUnicodeScalars(left: string, right: string): number {
-  const leftScalars = Array.from(left, (char) => char.codePointAt(0)!);
-  const rightScalars = Array.from(right, (char) => char.codePointAt(0)!);
+  const leftScalars = Array.from(left, (char) => char.codePointAt(0) ?? 0);
+  const rightScalars = Array.from(right, (char) => char.codePointAt(0) ?? 0);
   const count = Math.min(leftScalars.length, rightScalars.length);
 
   for (let index = 0; index < count; index += 1) {
-    const difference = leftScalars[index]! - rightScalars[index]!;
+    const difference = (leftScalars[index] ?? 0) - (rightScalars[index] ?? 0);
     if (difference !== 0) {
       return difference;
     }
@@ -31,9 +29,7 @@ function quote(value: string): string {
 }
 
 function normalizeExponent(value: string): string {
-  return value
-    .replace(/e\+/, "e")
-    .replace(/e(-?)0+(\d+)/, "e$1$2");
+  return value.replace(/e\+/, "e").replace(/e(-?)0+(\d+)/, "e$1$2");
 }
 
 function numberToCanonical(value: number): string {
@@ -55,17 +51,10 @@ function isPlainObject(value: object): boolean {
 }
 
 function childPath(parent: string, key: string): string {
-  return /^[A-Za-z_$][\w$]*$/u.test(key)
-    ? `${parent}.${key}`
-    : `${parent}[${quote(key)}]`;
+  return /^[A-Za-z_$][\w$]*$/u.test(key) ? `${parent}.${key}` : `${parent}[${quote(key)}]`;
 }
 
-function serialize(
-  value: unknown,
-  depth: number,
-  path: string,
-  ancestors: Set<object>,
-): string {
+function serialize(value: unknown, depth: number, path: string, ancestors: Set<object>): string {
   if (value === null) {
     return "null";
   }
@@ -96,6 +85,9 @@ function serialize(
 
   if (ancestors.has(value)) {
     return notJson("cyclic object graph", path);
+  }
+  if (host.isProxy(value)) {
+    return notJson("proxy objects are unsupported", path);
   }
   ancestors.add(value);
 
@@ -130,9 +122,7 @@ function serialize(
       if (items.length === 0) {
         return "[]";
       }
-      const inner = items
-        .map((item) => `${"  ".repeat(depth + 1)}${item}`)
-        .join(",\n");
+      const inner = items.map((item) => `${"  ".repeat(depth + 1)}${item}`).join(",\n");
       return `[\n${inner}\n${"  ".repeat(depth)}]`;
     }
 
@@ -157,7 +147,13 @@ function serialize(
       return "{}";
     }
     const properties = keys.map((key) => {
-      const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !("value" in descriptor)) {
+        return notJson(
+          "object property is not a plain enumerable data property",
+          childPath(path, key),
+        );
+      }
       const encoded = serialize(descriptor.value, depth + 1, childPath(path, key), ancestors);
       return `${"  ".repeat(depth + 1)}${quote(key)}: ${encoded}`;
     });

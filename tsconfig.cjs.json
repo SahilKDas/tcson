@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": "dist/cjs",
+    "declaration": false
+  },
+  "include": ["src/index.ts"]
+}

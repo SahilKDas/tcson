@@ -1,0 +1,4 @@
+export default {
+  runtime: "deno",
+  supported: true,
+};

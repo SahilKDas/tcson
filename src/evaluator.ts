@@ -1,13 +1,7 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-import * as vm from "node:vm";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
-import {
-  TysonError,
-  type TysonDiagnostic,
-  readableThrown,
-} from "./errors";
+import { readableThrown, type TcsonDiagnostic, TcsonError } from "./errors.js";
+import { host } from "./host.js";
 
 interface CompiledModule {
   readonly file: string;
@@ -24,7 +18,7 @@ interface ParsedModule {
   readonly hasSelectedResult: boolean;
 }
 
-interface MutableDiagnostic extends TysonDiagnostic {
+interface MutableDiagnostic extends TcsonDiagnostic {
   message: string;
   file?: string;
   line?: number;
@@ -43,7 +37,7 @@ function makeDiagnostic(
   sourceFile?: ts.SourceFile,
   start?: number,
   length?: number,
-): TysonDiagnostic {
+): TcsonDiagnostic {
   const diagnostic: MutableDiagnostic = { message };
   if (sourceFile) {
     diagnostic.file = sourceFile.fileName;
@@ -59,17 +53,12 @@ function makeDiagnostic(
   return diagnostic;
 }
 
-function fromTypescriptDiagnostic(diagnostic: ts.Diagnostic): TysonDiagnostic {
+function fromTypescriptDiagnostic(diagnostic: ts.Diagnostic): TcsonDiagnostic {
   const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
-  return makeDiagnostic(
-    message,
-    diagnostic.file,
-    diagnostic.start,
-    diagnostic.length,
-  );
+  return makeDiagnostic(message, diagnostic.file, diagnostic.start, diagnostic.length);
 }
 
-function throwCompile(diagnostics: readonly TysonDiagnostic[]): never {
+function throwCompile(diagnostics: readonly TcsonDiagnostic[]): never {
   const sorted = [...diagnostics].sort((left, right) => {
     const fileOrder = (left.file ?? "").localeCompare(right.file ?? "");
     if (fileOrder !== 0) return fileOrder;
@@ -78,17 +67,11 @@ function throwCompile(diagnostics: readonly TysonDiagnostic[]): never {
     return (left.column ?? 0) - (right.column ?? 0);
   });
   const message = sorted[0]?.message ?? "compile failed";
-  throw new TysonError("TYSON_COMPILE_ERROR", `Compile failed: ${message}`, sorted);
+  throw new TcsonError("TCSON_COMPILE_ERROR", `Compile failed: ${message}`, sorted);
 }
 
 function parseSource(file: string, source: string): ts.SourceFile {
-  return ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  return ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 }
 
 function hasExportSyntax(sourceFile: ts.SourceFile): boolean {
@@ -96,9 +79,7 @@ function hasExportSyntax(sourceFile: ts.SourceFile): boolean {
     if (ts.isExportAssignment(statement) || ts.isExportDeclaration(statement)) {
       return true;
     }
-    const modifiers = ts.canHaveModifiers(statement)
-      ? ts.getModifiers(statement)
-      : undefined;
+    const modifiers = ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined;
     return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
   });
 }
@@ -108,9 +89,7 @@ function hasExplicitDefault(sourceFile: ts.SourceFile): boolean {
     if (ts.isExportAssignment(statement)) {
       return !statement.isExportEquals;
     }
-    const modifiers = ts.canHaveModifiers(statement)
-      ? ts.getModifiers(statement)
-      : undefined;
+    const modifiers = ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined;
     const kinds = new Set(modifiers?.map((modifier) => modifier.kind));
     return kinds.has(ts.SyntaxKind.ExportKeyword) && kinds.has(ts.SyntaxKind.DefaultKeyword);
   });
@@ -140,35 +119,41 @@ function implicitObjectSource(file: string, source: string): string | undefined 
   return `export default (${source}\n);`;
 }
 
-function readUtf8(file: string, entry: boolean, importSpecifier?: string, importer?: string): string {
-  let bytes: Buffer;
+function readUtf8(
+  file: string,
+  entry: boolean,
+  importSpecifier?: string,
+  importer?: string,
+): string {
+  let bytes: Uint8Array;
   try {
-    const stat = fs.statSync(file);
+    const stat = host.stat(file);
     if (!stat.isFile()) {
       throw new Error("path does not name a regular file");
     }
-    bytes = fs.readFileSync(file);
+    bytes = host.readFile(file);
   } catch (cause) {
     if (!entry) {
-      throw new TysonError(
-        "TYSON_IMPORT_NOT_FOUND",
+      throw new TcsonError(
+        "TCSON_IMPORT_NOT_FOUND",
         `Cannot read import ${JSON.stringify(importSpecifier)} from ${importer}: ${readableThrown(cause)}`,
         [],
         cause,
       );
     }
 
-    const hostCode = (cause as NodeJS.ErrnoException | undefined)?.code;
+    const hostCode =
+      typeof cause === "object" && cause !== null ? Reflect.get(cause, "code") : undefined;
     if (hostCode === "ENOENT") {
-      throw new TysonError(
-        "TYSON_FILE_NOT_FOUND",
+      throw new TcsonError(
+        "TCSON_FILE_NOT_FOUND",
         `File not found: ${importSpecifier ?? file}`,
         [],
         cause,
       );
     }
-    throw new TysonError(
-      "TYSON_IO_ERROR",
+    throw new TcsonError(
+      "TCSON_IO_ERROR",
       `Cannot read path ${importSpecifier ?? file}: ${readableThrown(cause)}`,
       [],
       cause,
@@ -177,19 +162,24 @@ function readUtf8(file: string, entry: boolean, importSpecifier?: string, import
 
   try {
     return decoder.decode(bytes);
-  } catch (cause) {
-    throwCompile([
-      makeDiagnostic("File is not valid UTF-8", parseSource(file, ""), 0),
-    ]);
+  } catch {
+    throwCompile([makeDiagnostic("File is not valid UTF-8", parseSource(file, ""), 0)]);
   }
 }
 
 function validateAndCollectImports(module: ParsedModule): string[] {
   const dependencies: string[] = [];
-  const diagnostics: TysonDiagnostic[] = [];
+  const diagnostics: TcsonDiagnostic[] = [];
 
   const reject = (node: ts.Node, message: string): void => {
-    diagnostics.push(makeDiagnostic(message, module.sourceFile, node.getStart(module.sourceFile), node.getWidth(module.sourceFile)));
+    diagnostics.push(
+      makeDiagnostic(
+        message,
+        module.sourceFile,
+        node.getStart(module.sourceFile),
+        node.getWidth(module.sourceFile),
+      ),
+    );
   };
 
   const visit = (node: ts.Node): void => {
@@ -204,10 +194,10 @@ function validateAndCollectImports(module: ParsedModule): string[] {
       reject(node, "await is not supported");
     }
     const isGenerator =
-      (ts.isFunctionDeclaration(node)
-        || ts.isFunctionExpression(node)
-        || ts.isMethodDeclaration(node))
-      && node.asteriskToken !== undefined;
+      (ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isMethodDeclaration(node)) &&
+      node.asteriskToken !== undefined;
     if (ts.isYieldExpression(node) || isGenerator) {
       reject(node, "generator functions are not supported");
     }
@@ -219,10 +209,12 @@ function validateAndCollectImports(module: ParsedModule): string[] {
     if (ts.isIdentifier(node) && ["arguments", "exports", "require"].includes(node.text)) {
       const parent = node.parent;
       const isPropertyName =
-        (ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent) || ts.isMethodDeclaration(parent))
-          && parent.name === node
-        || (ts.isPropertySignature(parent) && parent.name === node)
-        || (ts.isPropertyAccessExpression(parent) && parent.name === node);
+        ((ts.isPropertyAssignment(parent) ||
+          ts.isPropertyDeclaration(parent) ||
+          ts.isMethodDeclaration(parent)) &&
+          parent.name === node) ||
+        (ts.isPropertySignature(parent) && parent.name === node) ||
+        (ts.isPropertyAccessExpression(parent) && parent.name === node);
       if (!isPropertyName) {
         reject(node, `the host-specific ${node.text} binding is not available`);
       }
@@ -233,17 +225,20 @@ function validateAndCollectImports(module: ParsedModule): string[] {
       } else {
         const specifier = node.moduleSpecifier.text;
         const isRelative = specifier.startsWith("./") || specifier.startsWith("../");
-        if (!isRelative || !specifier.endsWith(".tson")) {
-          reject(node, `only relative imports with a lowercase .tson suffix are supported: ${specifier}`);
+        if (!isRelative || !specifier.endsWith(".tcson")) {
+          reject(
+            node,
+            `only relative imports with a lowercase .tcson suffix are supported: ${specifier}`,
+          );
         } else if (
-          !node.importClause
-          || node.importClause.isTypeOnly
-          || !node.importClause.name
-          || node.importClause.namedBindings
+          !node.importClause ||
+          node.importClause.isTypeOnly ||
+          !node.importClause.name ||
+          node.importClause.namedBindings
         ) {
           reject(node, "only relative default imports are supported");
         } else {
-          const resolved = path.resolve(path.dirname(module.file), specifier);
+          const resolved = host.resolve(host.dirname(module.file), specifier);
           module.imports.set(specifier, resolved);
           dependencies.push(resolved);
         }
@@ -272,8 +267,6 @@ function transpile(module: ParsedModule): CompiledModule {
     compilerOptions: {
       target: ts.ScriptTarget.ES2015,
       module: ts.ModuleKind.CommonJS,
-      moduleResolution: ts.ModuleResolutionKind.Node10,
-      importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
       newLine: ts.NewLineKind.LineFeed,
       sourceMap: false,
       inlineSourceMap: false,
@@ -302,7 +295,9 @@ function buildGraph(entryFile: string, entryDisplayPath: string): Map<string, Co
   const load = (file: string, entry: boolean, specifier?: string, importer?: string): void => {
     const cycleStart = active.indexOf(file);
     if (cycleStart !== -1) {
-      const cycle = [...active.slice(cycleStart), file].map((item) => path.basename(item)).join(" -> ");
+      const cycle = [...active.slice(cycleStart), file]
+        .map((item) => host.basename(item))
+        .join(" -> ");
       throwCompile([makeDiagnostic(`Import cycle detected: ${cycle}`, parseSource(file, ""), 0)]);
     }
     if (parsed.has(file)) {
@@ -334,8 +329,9 @@ function buildGraph(entryFile: string, entryDisplayPath: string): Map<string, Co
       const dependencies = validateAndCollectImports(module);
       parsed.set(file, module);
       for (const dependency of dependencies) {
-        const dependencySpecifier = [...module.imports]
-          .find(([, resolved]) => resolved === dependency)?.[0];
+        const dependencySpecifier = [...module.imports].find(
+          ([, resolved]) => resolved === dependency,
+        )?.[0];
         load(dependency, false, dependencySpecifier, file);
       }
     } finally {
@@ -349,20 +345,14 @@ function buildGraph(entryFile: string, entryDisplayPath: string): Map<string, Co
   }
   for (const module of parsed.values()) {
     if (!module.hasSelectedResult) {
-      throw new TysonError(
-        "TYSON_EXPORT_MISSING",
-        `No eligible default export in ${module.file}`,
-      );
+      throw new TcsonError("TCSON_EXPORT_MISSING", `No eligible default export in ${module.file}`);
     }
   }
   return compiled;
 }
 
 function executeGraph(entryFile: string, graph: ReadonlyMap<string, CompiledModule>): unknown {
-  const context = vm.createContext(Object.create(null) as object, {
-    name: "tcson-evaluation",
-    codeGeneration: { strings: false, wasm: false },
-  });
+  const context = host.createContext();
   const evaluated = new Map<string, Record<string, unknown>>();
 
   const execute = (file: string): Record<string, unknown> => {
@@ -389,7 +379,7 @@ function executeGraph(entryFile: string, graph: ReadonlyMap<string, CompiledModu
     };
 
     const wrapper = `(function (exports, require) {\n${compiled.javascript}\n})`;
-    const script = new vm.Script(wrapper, { filename: file });
+    const script = host.createScript(wrapper, file);
     const run = script.runInContext(context) as (
       exports: Record<string, unknown>,
       require: (specifier: string) => Record<string, unknown>,
@@ -401,18 +391,15 @@ function executeGraph(entryFile: string, graph: ReadonlyMap<string, CompiledModu
   try {
     const exportsObject = execute(entryFile);
     if (!Object.hasOwn(exportsObject, "default")) {
-      throw new TysonError(
-        "TYSON_EXPORT_MISSING",
-        `No eligible default export in ${entryFile}`,
-      );
+      throw new TcsonError("TCSON_EXPORT_MISSING", `No eligible default export in ${entryFile}`);
     }
     return exportsObject.default;
   } catch (cause) {
-    if (cause instanceof TysonError) {
+    if (cause instanceof TcsonError) {
       throw cause;
     }
-    throw new TysonError(
-      "TYSON_RUNTIME_ERROR",
+    throw new TcsonError(
+      "TCSON_RUNTIME_ERROR",
       `Configuration runtime error: ${readableThrown(cause)}`,
       [],
       cause,
@@ -422,19 +409,16 @@ function executeGraph(entryFile: string, graph: ReadonlyMap<string, CompiledModu
 
 export function evaluateFile(inputPath: string): unknown {
   if (typeof inputPath !== "string" || inputPath.trim().length === 0) {
-    throw new TysonError(
-      "TYSON_INVALID_PATH",
-      "Invalid path: expected a non-empty string",
-    );
+    throw new TcsonError("TCSON_INVALID_PATH", "Invalid path: expected a non-empty string");
   }
-  if (!inputPath.endsWith(".tson")) {
-    throw new TysonError(
-      "TYSON_INVALID_PATH",
-      `Invalid path ${JSON.stringify(inputPath)}: expected a lowercase .tson suffix`,
+  if (!inputPath.endsWith(".tcson")) {
+    throw new TcsonError(
+      "TCSON_INVALID_PATH",
+      `Invalid path ${JSON.stringify(inputPath)}: expected a lowercase .tcson suffix`,
     );
   }
 
-  const entryFile = path.resolve(process.cwd(), inputPath);
+  const entryFile = host.resolve(host.cwd(), inputPath);
   const graph = buildGraph(entryFile, inputPath);
   return executeGraph(entryFile, graph);
 }
