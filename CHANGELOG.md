@@ -7,6 +7,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-beta.1] - 2026-09-01
+
 ### Added
 
 - Independent TcSON library API and CLI.
@@ -15,4 +17,5 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Node.js and Bun cross-platform quality matrices and Deno compatibility smoke coverage.
 - GitHub Packages validation, SBOM, provenance, and tag-driven release automation.
 
-[Unreleased]: https://github.com/SahilKDas/tcson/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/SahilKDas/tcson/compare/v1.0.0-beta.1...HEAD
+[1.0.0-beta.1]: https://github.com/SahilKDas/tcson/releases/tag/v1.0.0-beta.1
