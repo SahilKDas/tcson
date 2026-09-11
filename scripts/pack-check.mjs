@@ -1,14 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const keepTarball = process.argv.includes("--keep");
-const npmCli =
-  process.env.npm_execpath ??
-  resolve(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
-const runNpm = (args, options = {}) => execFileSync(process.execPath, [npmCli, ...args], options);
+const npmCli = process.env.npm_execpath;
+const runNpm = (args, options = {}) =>
+  npmCli
+    ? execFileSync(process.execPath, [npmCli, ...args], options)
+    : execFileSync("npm", args, options);
 const packed = JSON.parse(
   runNpm(["pack", "--json", "--ignore-scripts"], {
     encoding: "utf8",

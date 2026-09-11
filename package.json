@@ -1,6 +1,6 @@
 {
   "name": "@sahilkdas/tcson",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Deterministic TypeScript configuration for Node.js, Bun, and Deno",
   "license": "BSD-3-Clause",
   "type": "commonjs",
@@ -52,7 +52,7 @@
     "test": "npm run build && node --test",
     "test:coverage": "npm run build && node --experimental-test-coverage --test --test-coverage-include=dist/cjs/**/*.js --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=85",
     "test:bun": "npm run build && bun test",
-    "test:deno": "npm run build && deno run --allow-read test/deno-smoke.mjs && deno run --allow-read dist/esm/cli.js eval test/fixtures/deno.tcson",
+    "test:deno": "npm run build && deno run --allow-read --allow-env=NODE_ENV,NODE_INSPECTOR_IPC,TSC_NONPOLLING_WATCHER,TSC_WATCHDIRECTORY,TSC_WATCHFILE,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,VSCODE_INSPECTOR_OPTIONS test/deno-smoke.mjs && deno run --allow-read --allow-env=NODE_ENV,NODE_INSPECTOR_IPC,TSC_NONPOLLING_WATCHER,TSC_WATCHDIRECTORY,TSC_WATCHFILE,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,VSCODE_INSPECTOR_OPTIONS dist/esm/cli.js eval test/fixtures/deno.tcson",
     "typecheck": "tsc6 -p tsconfig.json --noEmit",
     "pack:check": "npm run build && publint --strict && attw --pack . && node scripts/pack-check.mjs",
     "prepack": "npm run build"

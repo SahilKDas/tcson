@@ -118,7 +118,9 @@ failure.
 With Deno:
 
 ```sh
-deno run --allow-read npm:@sahilkdas/tcson eval app.tcson
+deno run --allow-read \
+  --allow-env=NODE_ENV,NODE_INSPECTOR_IPC,TSC_NONPOLLING_WATCHER,TSC_WATCHDIRECTORY,TSC_WATCHFILE,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,VSCODE_INSPECTOR_OPTIONS \
+  npm:@sahilkdas/tcson eval app.tcson
 ```
 
 ## Language and output
@@ -126,6 +128,9 @@ deno run --allow-read npm:@sahilkdas/tcson eval app.tcson
 TcSON performs syntax-only TypeScript transpilation. It does not run the semantic type checker.
 Each call evaluates a complete relative import graph in a fresh realm, runs dependencies before
 their parents, and evaluates each file once per call.
+
+Deno additionally needs access to the TypeScript compiler watch and inspector-setting environment
+variables shown above. TcSON does not read other environment variables.
 
 The selected value must consist only of null, booleans, strings, finite numbers, dense arrays, and
 plain objects with enumerable string-keyed data properties. Cycles, accessors, sparse arrays,

@@ -7,6 +7,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-beta.2] - 2026-09-10
+
+### Fixed
+
+- Direct release-workflow invocation of the cross-platform npm package validator.
+- Deno 2.8 compatibility using an exact TypeScript compiler environment permission allowlist.
+
 ## [1.0.0-beta.1] - 2026-09-01
 
 ### Added
@@ -17,5 +24,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Node.js and Bun cross-platform quality matrices and Deno compatibility smoke coverage.
 - GitHub Packages validation, SBOM, provenance, and tag-driven release automation.
 
-[Unreleased]: https://github.com/SahilKDas/tcson/compare/v1.0.0-beta.1...HEAD
+[Unreleased]: https://github.com/SahilKDas/tcson/compare/v1.0.0-beta.2...HEAD
+[1.0.0-beta.2]: https://github.com/SahilKDas/tcson/releases/tag/v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/SahilKDas/tcson/releases/tag/v1.0.0-beta.1

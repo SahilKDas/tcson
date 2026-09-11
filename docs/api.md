@@ -69,3 +69,7 @@ tcson eval --help
 `eval` writes canonical JSON plus one newline to stdout. Errors and located diagnostics are
 written to stderr. The CLI does not emit color codes. Successful help, version, and evaluation
 commands exit with status 0; all usage and evaluation failures exit with status 1.
+
+On Deno, loading the pinned TypeScript compiler also requires narrowly scoped environment access
+to its `NODE_ENV`, `NODE_INSPECTOR_IPC`, `VSCODE_INSPECTOR_OPTIONS`, and `TSC_*` watch-setting
+variables. The exact allowlist is shown in the README's Deno command.
